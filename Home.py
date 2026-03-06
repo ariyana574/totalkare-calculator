@@ -17,17 +17,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# === Company logo in the top-right corner (optional) ===
-logo_path = BASE_DIR / "totalkare.png"
-if logo_path.exists():
-    from PIL import Image
-    logo = Image.open(logo_path)
-    logo_col1, logo_col2 = st.columns([5, 1])
-    with logo_col2:
-        st.image(logo, width="stretch")
-else:
-    _, _ = st.columns([5, 1])
-
 # Clear cache button (AFTER set_page_config)
 if st.sidebar.button("🔄 Refresh Prices from Google Sheets"):
     st.cache_resource.clear()
