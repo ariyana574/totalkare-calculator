@@ -24,7 +24,7 @@ if logo_path.exists():
     logo = Image.open(logo_path)
     logo_col1, logo_col2 = st.columns([5, 1])
     with logo_col2:
-        st.image(logo, use_container_width=True)
+        st.image(logo, width="stretch")
 else:
     _, _ = st.columns([5, 1])
 
