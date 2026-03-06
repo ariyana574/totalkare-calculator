@@ -4,22 +4,20 @@ Main Streamlit Application
 """
 
 import streamlit as st
-
-# Clear cache button (for development)
-if st.sidebar.button("🔄 Refresh Prices from Google Sheets"):
-    st.cache_resource.clear()
-    st.rerun()
 import pandas as pd
 from datetime import datetime
 
-
-# Set page config
 st.set_page_config(
     page_title="TotalKare Contract Calculator",
     page_icon="🔧",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Clear cache button (AFTER set_page_config)
+if st.sidebar.button("🔄 Refresh Prices from Google Sheets"):
+    st.cache_resource.clear()
+    st.rerun()
 
 # Initialize session state
 if 'step' not in st.session_state:
