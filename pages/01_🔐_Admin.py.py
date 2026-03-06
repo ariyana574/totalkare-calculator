@@ -44,12 +44,21 @@ def main():
         return
     
     st.title("🔧 TotalKare Admin Dashboard")
-    
-    # Logout button
-    if st.button("Logout"):
-        st.session_state.password_correct = False
-        st.rerun()
-    
+
+
+    col1, col2, col3 = st.columns([1, 1, 3])
+    with col1:
+        if st.button("Logout"):
+            st.session_state.password_correct = False
+            st.rerun()
+    with col2:
+        if st.button("🔄 Clear Cache"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.success("✓ Cleared!")
+    with col3:
+        st.empty() 
+
     st.markdown("---")
     
     # Navigation
@@ -257,13 +266,17 @@ def main():
             if equipment_name and price_new > 0 and price_old > 0:
                 if add_ancillary_item(equipment_name, price_new, price_old):
                     st.success(f"✓ Added {equipment_name} successfully!")
+
+                    # ADD THESE TWO LINES:
+                    st.cache_data.clear()
                     st.cache_resource.clear()
-                    st.info("This equipment will now appear in the main calculator!")
+
+                    st.info("Cache cleared! This equipment will now appear in the main calculator!")
+                    st.rerun()  # Refresh the page to show new item in the table above
                 else:
                     st.error("Failed to add equipment")
             else:
                 st.warning("Please fill in all fields with valid values")
-
 
 if __name__ == "__main__":
     main()

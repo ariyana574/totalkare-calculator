@@ -19,32 +19,33 @@ SCOPES = [
 def get_sheets_client():
     """Get authenticated Google Sheets client (cached)"""
     try:
-        # Check if running on Streamlit Cloud (has secrets)
-        if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
-            # Running on Streamlit Cloud - use secrets
-            import json
-            from oauth2client.service_account import ServiceAccountCredentials
-            
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(
-                dict(st.secrets["gcp_service_account"]),
-                SCOPES
-            )
-        else:
-            # Running locally - use JSON file
-            from oauth2client.service_account import ServiceAccountCredentials
-            
-            creds = ServiceAccountCredentials.from_json_keyfile_name(
-                'service-account.json',
-                SCOPES
-            )
+        # Try Streamlit Cloud secrets first
+        try:
+            if 'gcp_service_account' in st.secrets:
+                # Running on Streamlit Cloud
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                    dict(st.secrets["gcp_service_account"]),
+                    SCOPES
+                )
+                client = gspread.authorize(creds)
+                return client
+        except (FileNotFoundError, KeyError):
+            # Secrets not found, fall through to local file
+            pass
         
+        # Running locally - use JSON file
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            'service-account.json.json',
+            SCOPES
+        )
         client = gspread.authorize(creds)
         return client
+        
     except Exception as e:
         st.error(f"Failed to connect to Google Sheets: {str(e)}")
         return None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
 def get_sheet_data(sheet_name):
     """Get all data from a specific sheet as DataFrame"""
     try:

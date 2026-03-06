@@ -537,93 +537,43 @@ def show_lift_service_options():
     st.session_state.contract_config['lube_pots_qty'] = lube_pots_qty
     st.session_state.contract_config['battery_plan_qty'] = battery_plan_qty
     
-    # Ancillary equipment with QUANTITY
+    # Ancillary equipment with QUANTITY (DYNAMIC - loads from Google Sheets)
     st.markdown("---")
     st.subheader("Ancillary Equipment")
     
-    st.write("Select ancillary equipment and specify quantity:")
+    # Get available ancillary from pricing
+    from config.pricing import get_pricing
+    pricing = get_pricing(st.session_state.contract_config.get('price_list', 'new'))
+    available_ancillary = pricing.get('ancillary_rates', {})
     
-    ancillary_items = {}
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Shaker Plates"):
-            with col2:
-                ancillary_items['shaker_plates'] = st.number_input("Qty", min_value=1, value=1, step=1, key="shaker_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Headlamp Tester"):
-            with col2:
-                ancillary_items['headlamp_tester'] = st.number_input("Qty", min_value=1, value=1, step=1, key="headlamp_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Pit Jacks"):
-            with col2:
-                ancillary_items['pit_jacks'] = st.number_input("Qty", min_value=1, value=1, step=1, key="pit_jacks_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Radius Plates"):
-            with col2:
-                ancillary_items['radius_plates'] = st.number_input("Qty", min_value=1, value=1, step=1, key="radius_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Heavy Duty Tyre Changers"):
-            with col2:
-                ancillary_items['heavy_duty_tyre_changers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="heavy_tyre_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Light Duty Tyre Changers"):
-            with col2:
-                ancillary_items['light_duty_tyre_changers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="light_tyre_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Wheel Alignment"):
-            with col2:
-                ancillary_items['wheel_alignment'] = st.number_input("Qty", min_value=1, value=1, step=1, key="wheel_align_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Heavy Duty Wheel Balancers"):
-            with col2:
-                ancillary_items['heavy_duty_wheel_balancers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="heavy_balance_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Light Duty Wheel Balancers"):
-            with col2:
-                ancillary_items['light_duty_wheel_balancers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="light_balance_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Transmission Jacks"):
-            with col2:
-                ancillary_items['transmission_jacks'] = st.number_input("Qty", min_value=1, value=1, step=1, key="trans_jacks_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Transmission Jacks + 2 ROTES"):
-            with col2:
-                ancillary_items['transmission_jacks_2_rotes'] = st.number_input("Qty", min_value=1, value=1, step=1, key="trans_rotes_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Support Stands"):
-            with col2:
-                ancillary_items['support_stands'] = st.number_input("Qty", min_value=1, value=1, step=1, key="support_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Air Con Service"):
-            with col2:
-                ancillary_items['aircon'] = st.number_input("Qty", min_value=1, value=1, step=1, key="aircon_qty")
-    
-    st.session_state.contract_config['ancillary_items'] = ancillary_items
+    if available_ancillary:
+        st.write("Select ancillary equipment and specify quantity:")
+        
+        ancillary_items = {}
+        
+        for equipment_type in sorted(available_ancillary.keys()):
+            price = available_ancillary[equipment_type]
+            display_name = equipment_type.replace('_', ' ').title()
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                checked = st.checkbox(f"{display_name} (£{price})", key=f"lift_anc_{equipment_type}")
+            
+            if checked:
+                with col2:
+                    qty = st.number_input(
+                        "Qty", 
+                        min_value=1, 
+                        value=1, 
+                        step=1, 
+                        key=f"lift_qty_{equipment_type}"
+                    )
+                    ancillary_items[equipment_type] = qty
+        
+        st.session_state.contract_config['ancillary_items'] = ancillary_items
+    else:
+        st.warning("No ancillary equipment available in pricing")
+        st.session_state.contract_config['ancillary_items'] = {}
     
     # Continue button
     if st.button("Continue to Review →", type="primary"):
@@ -664,105 +614,43 @@ def show_brake_tester_service_options():
     
     st.session_state.contract_config['rote_visits'] = rote_visits
     
-    # Ancillary equipment with QUANTITY
+    # Ancillary equipment with QUANTITY (DYNAMIC - loads from Google Sheets)
     st.markdown("---")
     st.subheader("Ancillary Equipment")
     
-    st.write("Select ancillary equipment and specify quantity:")
+    # Get available ancillary from pricing
+    from config.pricing import get_pricing
+    pricing = get_pricing(st.session_state.contract_config.get('price_list', 'new'))
+    available_ancillary = pricing.get('ancillary_rates', {})
     
-    ancillary_items = {}
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Shaker Plates"):
-            with col2:
-                ancillary_items['shaker_plates'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_shaker_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Headlamp Tester"):
-            with col2:
-                ancillary_items['headlamp_tester'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_headlamp_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Pit Jacks (2 services/year)"):
-            with col2:
-                ancillary_items['pit_jacks'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_pit_jacks_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Pit Jacks + 2 ROTE"):
-            with col2:
-                ancillary_items['pit_jacks_2_rote'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_pit_2rote_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Pit Jacks + 1 ROTE"):
-            with col2:
-                ancillary_items['pit_jacks_1_rote'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_pit_1rote_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Radius Plates"):
-            with col2:
-                ancillary_items['radius_plates'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_radius_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Heavy Duty Tyre Changers"):
-            with col2:
-                ancillary_items['heavy_duty_tyre_changers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_heavy_tyre_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Light Duty Tyre Changers"):
-            with col2:
-                ancillary_items['light_duty_tyre_changers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_light_tyre_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Wheel Alignment"):
-            with col2:
-                ancillary_items['wheel_alignment'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_wheel_align_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Heavy Duty Wheel Balancers"):
-            with col2:
-                ancillary_items['heavy_duty_wheel_balancers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_heavy_balance_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Light Duty Wheel Balancers"):
-            with col2:
-                ancillary_items['light_duty_wheel_balancers'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_light_balance_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Transmission Jacks"):
-            with col2:
-                ancillary_items['transmission_jacks'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_trans_jacks_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Transmission Jacks + 2 ROTES"):
-            with col2:
-                ancillary_items['transmission_jacks_2_rotes'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_trans_rotes_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Support Stands"):
-            with col2:
-                ancillary_items['support_stands'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_support_qty")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        if st.checkbox("Air Con Service"):
-            with col2:
-                ancillary_items['aircon'] = st.number_input("Qty", min_value=1, value=1, step=1, key="bt_aircon_qty")
-    
-    st.session_state.contract_config['ancillary_items'] = ancillary_items
+    if available_ancillary:
+        st.write("Select ancillary equipment and specify quantity:")
+        
+        ancillary_items = {}
+        
+        for equipment_type in sorted(available_ancillary.keys()):
+            price = available_ancillary[equipment_type]
+            display_name = equipment_type.replace('_', ' ').title()
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                checked = st.checkbox(f"{display_name} (£{price})", key=f"bt_anc_{equipment_type}")
+            
+            if checked:
+                with col2:
+                    qty = st.number_input(
+                        "Qty", 
+                        min_value=1, 
+                        value=1, 
+                        step=1, 
+                        key=f"bt_qty_{equipment_type}"
+                    )
+                    ancillary_items[equipment_type] = qty
+        
+        st.session_state.contract_config['ancillary_items'] = ancillary_items
+    else:
+        st.warning("No ancillary equipment available in pricing")
+        st.session_state.contract_config['ancillary_items'] = {}
     
     # Continue button
     if st.button("Continue to Review →", type="primary"):
@@ -773,7 +661,6 @@ def show_brake_tester_service_options():
     if st.button("← Back"):
         st.session_state.step = 5
         st.rerun()
-
 def show_review_and_calculate():
     """Step 7: Review and calculate pricing"""
     st.header("Step 7: Review & Calculate")
