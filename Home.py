@@ -90,7 +90,7 @@ def show_csv_upload():
             
             # Validate required columns
             required_cols = ['ID', 'Name.1', 'Date Created', 'Item', 'Customer Equipment Quantity', 
-                           'Equipment Address', 'Billing Zip', 'Serial Number', 'Mfg Serial Number']
+               'Shipping Address 1', 'Shipping City', 'Shipping Zip', 'Serial Number', 'Mfg Serial Number']
             
             missing = [col for col in required_cols if col not in df.columns]
             if missing:
@@ -148,7 +148,7 @@ def show_equipment_selection():
         if len(customer_records) > 0:  # Check if records exist
             customer_name = customer_records['Name.1'].iloc[0]
             address = customer_records['Equipment Address'].iloc[0] if 'Equipment Address' in customer_records.columns else ''
-            zip_code = customer_records['Billing Zip'].iloc[0] if 'Billing Zip' in customer_records.columns else ''
+            zip_code = customer_records['Shipping Zip'].iloc[0] if 'Shipping Zip' in customer_records.columns else ''
             display = f"{customer_name} - ID: {cid} - {address} {zip_code}"
             customer_options.append(display)
             customer_display_to_id[display] = str(cid)
@@ -177,14 +177,17 @@ def show_equipment_selection():
             return
         
         # Display customer info
+        address_1 = str(customer_df['Shipping Address 1'].iloc[0]) if 'Shipping Address 1' in customer_df.columns else ''
+        city = str(customer_df['Shipping City'].iloc[0]) if 'Shipping City' in customer_df.columns else ''
+        zip_code = str(customer_df['Shipping Zip'].iloc[0]) if 'Shipping Zip' in customer_df.columns else ''
+
         st.info(f"""
         **Customer:** {customer_df['Name.1'].iloc[0]}
-        **Address:** {customer_df['Equipment Address'].iloc[0]} {customer_df['Billing Zip'].iloc[0]}
+        **Address:** {address_1}, {city} {zip_code}
         **Company Code:** {customer_id}
         """)
-        
         # Check for island restrictions
-        postcode = customer_df['Billing Zip'].iloc[0]
+        postcode = customer_df['Shipping Zip'].iloc[0] if 'Shipping Zip' in customer_df.columns else ''
         from config.rules import get_island_restrictions
         island_rules = get_island_restrictions(postcode)
         
@@ -229,10 +232,11 @@ def show_equipment_selection():
                     'quantity': float(row['Customer Equipment Quantity']) if pd.notna(row['Customer Equipment Quantity']) else 1.0,
                     'customer_name': row['Name.1'],
                     'customer_id': customer_id,
-                    'address': row['Equipment Address'],
-                    'postcode': row['Billing Zip']
+                    'address_1': str(row.get('Shipping Address 1', '')),
+                    'city': str(row.get('Shipping City', '')),
+                    'state': str(row.get('Shipping State/Province', '')),
+                    'postcode': str(row.get('Shipping Zip', ''))
                 })
-        
         # Store selections
         st.session_state.selected_equipment = selected_items
         st.session_state.island_restrictions = island_rules
@@ -682,7 +686,8 @@ def show_review_and_calculate():
     with col1:
         st.subheader("Customer Information")
         st.write(f"**Customer:** {first_equipment['customer_name']}")
-        st.write(f"**Address:** {first_equipment['address']}")
+        st.write(f"**Address:** {first_equipment.get('address_1', '')}")
+        st.write(f"**City:** {first_equipment.get('city', '')}")
         st.write(f"**Postcode:** {first_equipment['postcode']}")
         st.write(f"**Company Code:** {first_equipment['customer_id']}")
     
@@ -719,6 +724,7 @@ def show_review_and_calculate():
     total_annual = 0
     total_contract = 0
     monthly_dd = 0
+    result_data = None  # Store for PDF generation
     
     # Check if PRO-2 warranty
     if config['contract_type'] == 'pro2_warranty':
@@ -819,6 +825,7 @@ def show_review_and_calculate():
         total_annual = result['annual_cost']
         total_contract = result['total_contract_cost']
         monthly_dd = result['monthly_dd']
+        result_data = result
     
     else:
         # Regular lift or brake tester contracts
@@ -830,6 +837,7 @@ def show_review_and_calculate():
                 if idx == 1:
                     # First equipment - include all add-ons
                     result = calculate_lift_contract(equipment, config) if st.session_state.equipment_type == "lift" else calculate_brake_tester_contract(equipment, config)
+                    result_data = result  # Store for PDF
                 else:
                     # Subsequent equipment - NO add-ons
                     config_no_addons = config.copy()
@@ -883,7 +891,7 @@ def show_review_and_calculate():
                 help="Total cost over contract duration"
             )
         
-        # Show service details
+    # Show service details
     st.markdown("---")
     st.subheader("📋 Service Details")
 
@@ -913,6 +921,76 @@ def show_review_and_calculate():
         for anc_type, qty in config['ancillary_items'].items():
             st.write(f"  • {anc_type.replace('_', ' ').title()} (×{qty})")
 
+    # PDF Generation Section (ONLY for brake testers)
+    if st.session_state.equipment_type == "brake_tester":
+        st.markdown("---")
+        st.subheader("📄 Generate PDF Contract")
+        
+        uploaded_pdf = st.file_uploader(
+            "Upload brake tester contract template (PDF):",
+            type=['pdf'],
+            help="Upload either Standard or AFT Brake Tester template",
+            key="pdf_template"
+        )
+        
+        if uploaded_pdf:
+            # Detect template type
+            if "AFT" in uploaded_pdf.name.upper():
+                template_type = "AFT"
+                st.info("🔍 Detected: **AFT Brake Tester Template** (with pit jacks option)")
+            else:
+                template_type = "Standard"
+                st.info("🔍 Detected: **Standard Brake Tester Template**")
+            
+            # Generate PDF button
+            if st.button("📄 Generate Filled Contract", type="primary", key="gen_pdf"):
+                try:
+                    from utils.pdf_filler import fill_brake_tester_pdf
+                    from config.pricing import get_pricing
+
+                    # Get labour rates from Google Sheets
+                    pricing_data = get_pricing(config.get('price_list', 'new'))
+                    labour_rates = pricing_data.get('labour_rates', {}).get('brake_tester', {})
+
+                    total_months = config.get('years', 1) * 12
+                    correct_monthly_dd = total_contract / total_months
+
+                    # Prepare result data with labour rates
+                    pdf_result = {
+                        'annual_cost': total_annual,
+                        'monthly_dd': correct_monthly_dd,
+                        'total_contract_cost': total_contract,
+                        'labour_rates': labour_rates
+                    }
+
+                    # Fill the PDF
+                    filled_pdf = fill_brake_tester_pdf(
+                        template_file=uploaded_pdf,
+                        template_type=template_type,
+                        equipment_list=equipment_list,
+                        config=config,
+                        pricing_result=pdf_result
+                    )
+
+                    # Generate filename
+                    customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
+                    filename = f"Brake_Tester_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+                    # Download button
+                    st.download_button(
+                        label="⬇️ Download Filled Contract",
+                        data=filled_pdf,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_pdf"
+                    )
+
+                    st.success("✓ PDF generated successfully!")
+
+                except Exception as e:
+                    st.error(f"Error generating PDF: {str(e)}")
+                    st.exception(e)  # Show full traceback for debugging
+
     st.markdown("---")
 
     # Action buttons
@@ -929,11 +1007,6 @@ def show_review_and_calculate():
                 del st.session_state[key]
             st.session_state.step = 1
             st.rerun()
-
-    with col3:
-        if st.button("📄 Generate PDF Contract", type="primary"):
-            st.success("✓ PDF generation coming soon!")
-
 def calculate_lift_contract(equipment, config):
     """Calculate lift contract pricing"""
     from calculators.lift_calculator import LiftCalculator
