@@ -74,56 +74,117 @@ def show_equipment_type_selection():
             st.rerun()
 
 def show_csv_upload():
-    """Step 2: Upload NetSuite CSV"""
-    st.header("Step 2: Upload NetSuite Data")
+    """Step 2: Upload NetSuite Data or Fetch from API"""
+    st.header("Step 2: Load Equipment Data")
     
-    uploaded_file = st.file_uploader(
-        "Upload NetSuite Customer Equipment CSV",
-        type=['csv'],
-        help="Export from NetSuite: Customer Equipment list"
+    # Data source toggle - API FIRST
+    data_source = st.radio(
+        "📊 Select Data Source",
+        ["Fetch from NetSuite API", "Upload CSV File"],
+        horizontal=True
     )
     
-    if uploaded_file is not None:
-        try:
-            # Read CSV
-            df = pd.read_csv(uploaded_file)
+    if data_source == "Upload CSV File":
+        # Original CSV upload logic
+        uploaded_file = st.file_uploader(
+            "Upload NetSuite Customer Equipment CSV",
+            type=['csv'],
+            help="Export from NetSuite: Customer Equipment list"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                # Read CSV
+                df = pd.read_csv(uploaded_file)
+                
+                # Validate required columns
+                required_cols = ['ID', 'Name.1', 'Date Created', 'Item', 'Customer Equipment Quantity', 
+                   'Shipping Address 1', 'Shipping City', 'Shipping Zip', 'Serial Number', 'Mfg Serial Number']
+                
+                missing = [col for col in required_cols if col not in df.columns]
+                if missing:
+                    st.error(f"Missing columns: {', '.join(missing)}")
+                    return
+                
+                # Store in session state
+                st.session_state.customer_data = df
+                
+                # Show stats
+                st.success("✓ File uploaded successfully!")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Records", len(df))
+                with col2:
+                    st.metric("Unique Customers", df['ID'].nunique())
+                with col3:
+                    equipment_count = df['Item'].nunique()
+                    st.metric("Equipment Types", equipment_count)
+                
+                # Continue button
+                if st.button("Continue to Equipment Selection →", type="primary"):
+                    st.session_state.step = 3
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"Error reading file: {str(e)}")
+    
+    else:
+        # NetSuite API
+        from utils.netsuite_api import get_brake_tester_equipment
+        
+        # Only show fetch button if no data is loaded
+        if st.session_state.customer_data is None:
+            st.info("Click the button below to fetch equipment data from NetSuite")
             
-            # Validate required columns
-            required_cols = ['ID', 'Name.1', 'Date Created', 'Item', 'Customer Equipment Quantity', 
-               'Shipping Address 1', 'Shipping City', 'Shipping Zip', 'Serial Number', 'Mfg Serial Number']
+            if st.button("🔄 Fetch Equipment from NetSuite", type="primary"):
+                df = get_brake_tester_equipment()
+                
+                if not df.empty:
+                    # Store in session state
+                    st.session_state.customer_data = df
+                    st.rerun()  # Rerun to hide the button
+                else:
+                    st.error("❌ No equipment found in NetSuite or connection failed")
+        
+        # Show data and continue button when data exists
+        if st.session_state.customer_data is not None:
+            df = st.session_state.customer_data
             
-            missing = [col for col in required_cols if col not in df.columns]
-            if missing:
-                st.error(f"Missing columns: {', '.join(missing)}")
-                return
-            
-            # Store in session state
-            st.session_state.customer_data = df
+            st.success(f"✅ Data ready: {len(df)} records loaded")
             
             # Show stats
-            st.success("✓ File uploaded successfully!")
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Records", len(df))
             with col2:
-                st.metric("Unique Customers", df['ID'].nunique())
+                try:
+                    unique_count = len(df['ID'].unique()) if 'ID' in df.columns else 0
+                    st.metric("Unique Customers", unique_count)
+                except:
+                    st.metric("Unique Customers", "-")
             with col3:
-                equipment_count = df['Item'].nunique()
-                st.metric("Equipment Types", equipment_count)
+                try:
+                    item_count = len(df['Item'].unique()) if 'Item' in df.columns else 0
+                    st.metric("Equipment Types", item_count)
+                except:
+                    st.metric("Equipment Types", "-")
+
+            # Debug info
+            with st.expander("🔍 Debug: Data Structure"):
+                st.write("**Columns:**")
+                st.write(df.columns.tolist())
+                st.write("\n**Data Preview:**")
+                st.dataframe(df.head(3))
             
             # Continue button
-            if st.button("Continue to Equipment Selection →", type="primary"):
+            if st.button("Continue to Equipment Selection →", type="primary", key="continue"):
                 st.session_state.step = 3
                 st.rerun()
-                
-        except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
     
     # Back button
     if st.button("← Back"):
         st.session_state.step = 1
         st.rerun()
-
 def show_equipment_selection():
     """Step 3: Select customer and equipment"""
     st.header("Step 3: Select Customer & Equipment")
@@ -144,12 +205,17 @@ def show_equipment_selection():
     customer_display_to_id = {}
     
     for cid in customer_ids:
-        customer_records = df[df['ID'] == cid]
-        if len(customer_records) > 0:  # Check if records exist
+        # Convert both to string for comparison - THIS IS THE FIX
+        customer_records = df[df['ID'].astype(str) == str(cid)]
+        
+        if len(customer_records) > 0:
             customer_name = customer_records['Name.1'].iloc[0]
-            address = customer_records['Equipment Address'].iloc[0] if 'Equipment Address' in customer_records.columns else ''
+            address_1 = customer_records['Shipping Address 1'].iloc[0] if 'Shipping Address 1' in customer_records.columns else ''
             zip_code = customer_records['Shipping Zip'].iloc[0] if 'Shipping Zip' in customer_records.columns else ''
-            display = f"{customer_name} - ID: {cid} - {address} {zip_code}"
+            
+            # Show equipment count
+            equipment_count = len(customer_records)
+            display = f"{customer_name} - ID: {cid} - {address_1} {zip_code} ({equipment_count} items)"
             customer_options.append(display)
             customer_display_to_id[display] = str(cid)
     
@@ -171,8 +237,7 @@ def show_equipment_selection():
         # Get customer data (ensure types align)
         customer_df = df[df['ID'].astype(str) == str(customer_id)]
         
-        
-        if len(customer_df) == 0:  # Double-check
+        if len(customer_df) == 0:
             st.error("No equipment found for this customer")
             return
         
@@ -185,7 +250,9 @@ def show_equipment_selection():
         **Customer:** {customer_df['Name.1'].iloc[0]}
         **Address:** {address_1}, {city} {zip_code}
         **Company Code:** {customer_id}
+        **Equipment Count:** {len(customer_df)} items
         """)
+        
         # Check for island restrictions
         postcode = customer_df['Shipping Zip'].iloc[0] if 'Shipping Zip' in customer_df.columns else ''
         from config.rules import get_island_restrictions
@@ -216,20 +283,22 @@ def show_equipment_selection():
         selected_items = []
         for idx, row in customer_df.iterrows():
             # Get serial number (fallback logic)
-            serial = row['Serial Number'] if pd.notna(row['Serial Number']) else row['Mfg Serial Number']
+            serial = row['Serial Number'] if pd.notna(row['Serial Number']) and str(row['Serial Number']).strip() != '' else row.get('Mfg Serial Number', '')
             
             # Get description or use item as fallback
-            description = row['Description'] if pd.notna(row['Description']) else row['Item']
+            description = row['Description'] if pd.notna(row['Description']) and str(row['Description']).strip() != '' else row['Item']
             
-            item_label = f"**{description}** - {row['Item']} (Serial: {serial}) - Qty: {row['Customer Equipment Quantity']} - date: {row['Date Created'][:10]}"
+            # Get date created safely
+            date_created = str(row.get('Date Created', ''))[:10] if pd.notna(row.get('Date Created')) else 'N/A'
             
+            item_label = f"**{description}** - {row['Item']} (Serial: {serial}) - Qty: {row['Customer Equipment Quantity']} - Date: {date_created}"
             
             if st.checkbox(item_label, key=f"eq_{idx}"):
                 selected_items.append({
                     'item': row['Item'],
                     'description': description,
                     'serial': serial,
-                    'quantity': float(row['Customer Equipment Quantity']) if pd.notna(row['Customer Equipment Quantity']) else 1.0,
+                    'quantity': float(row['Customer Equipment Quantity']) if pd.notna(row['Customer Equipment Quantity']) and str(row['Customer Equipment Quantity']).strip() != '' else 1.0,
                     'customer_name': row['Name.1'],
                     'customer_id': customer_id,
                     'address_1': str(row.get('Shipping Address 1', '')),
@@ -237,6 +306,7 @@ def show_equipment_selection():
                     'state': str(row.get('Shipping State/Province', '')),
                     'postcode': str(row.get('Shipping Zip', ''))
                 })
+        
         # Store selections
         st.session_state.selected_equipment = selected_items
         st.session_state.island_restrictions = island_rules
@@ -253,7 +323,6 @@ def show_equipment_selection():
     if st.button("← Back"):
         st.session_state.step = 2
         st.rerun()
-
 def show_contract_type_selection():
     """Step 4: Contract type, duration, price list"""
     st.header("Step 4: Contract Type & Duration")
