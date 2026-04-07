@@ -29,7 +29,14 @@ def check_password():
         password = st.text_input("Enter admin password:", type="password")
         
         if st.button("Login"):
-            if password == "totalkare2025":  # Change this password!
+            # Get password from secrets - NO fallback!
+            if "admin" not in st.secrets or "password" not in st.secrets["admin"]:
+                st.error("⚠️ Admin password not configured. Please add to secrets.")
+                st.stop()
+            
+            correct_password = st.secrets["admin"]["password"]
+            
+            if password == correct_password:
                 st.session_state.password_correct = True
                 st.rerun()
             else:

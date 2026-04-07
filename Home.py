@@ -80,7 +80,7 @@ def show_csv_upload():
     # Data source toggle - API FIRST
     data_source = st.radio(
         "📊 Select Data Source",
-        ["Fetch from NetSuite API", "Upload CSV File"],
+        ["Fetch Data from NetSuite", "Upload CSV File"],
         horizontal=True
     )
     
@@ -292,6 +292,8 @@ def show_equipment_selection():
             date_created = str(row.get('Date Created', ''))[:10] if pd.notna(row.get('Date Created')) else 'N/A'
             
             item_label = f"**{description}** - {row['Item']} (Serial: {serial}) - Qty: {row['Customer Equipment Quantity']} - Date: {date_created}"
+
+            #customer_df.loc[idx, 'Description'] 
             
             if st.checkbox(item_label, key=f"eq_{idx}"):
                 selected_items.append({
