@@ -992,23 +992,24 @@ def show_review_and_calculate():
         for anc_type, qty in config['ancillary_items'].items():
             st.write(f"  • {anc_type.replace('_', ' ').title()} (×{qty})")
 
-    # PDF Generation Section (ONLY for brake testers)
-    if st.session_state.equipment_type == "brake_tester":
-        st.markdown("---")
-        st.subheader("📄 Generate PDF Contract")
-        
-        uploaded_pdf = st.file_uploader(
-            "Upload brake tester contract template (PDF):",
-            type=['pdf'],
-            help="Upload either Standard or AFT Brake Tester template",
-            key="pdf_template"
-        )
-        
-        if uploaded_pdf:
+    # PDF Generation Section (FOR BOTH LIFTS AND BRAKE TESTERS)
+    st.markdown("---")
+    st.subheader("📄 Generate PDF Contract")
+    
+    uploaded_pdf = st.file_uploader(
+        "Upload contract template (PDF):",
+        type=['pdf'],
+        help="Upload the appropriate template for your contract type",
+        key="pdf_template"
+    )
+    
+    if uploaded_pdf:
+        # BRAKE TESTER PDF GENERATION
+        if st.session_state.equipment_type == "brake_tester":
             # Detect template type
             if "AFT" in uploaded_pdf.name.upper():
                 template_type = "AFT"
-                st.info("🔍 Detected: **AFT Brake Tester Template** (with pit jacks option)")
+                st.info("🔍 Detected: **AFT Brake Tester Template**")
             else:
                 template_type = "Standard"
                 st.info("🔍 Detected: **Standard Brake Tester Template**")
@@ -1060,7 +1061,67 @@ def show_review_and_calculate():
 
                 except Exception as e:
                     st.error(f"Error generating PDF: {str(e)}")
-                    st.exception(e)  # Show full traceback for debugging
+                    st.exception(e)
+        
+        # LIFT PDF GENERATION
+        else:  # equipment_type == "lift"
+            # Show template info
+            st.info(f"🔍 Template: **{uploaded_pdf.name}**")
+            
+            # Generate PDF button
+            if st.button("📄 Generate Filled Contract", type="primary", key="gen_pdf"):
+                try:
+                    from utils.pdf_filler import fill_lift_pdf
+                    from config.pricing import get_pricing
+
+                    # Get labour rates from Google Sheets
+                    pricing_data = get_pricing(config.get('price_list', 'new'))
+                    
+                    # Use contract type directly (standard_service, extra_service, fixed_labour)
+                    contract_type = config['contract_type']
+                    
+                    # PRO-2 Warranty uses extra_service labour rates
+                    if contract_type == 'pro2_warranty':
+                        labour_rates = pricing_data.get('labour_rates', {}).get('extra_service', {})
+                    else:
+                        labour_rates = pricing_data.get('labour_rates', {}).get(contract_type, {})
+
+                    # Prepare result data with labour rates
+                    pdf_result = {
+                        'annual_cost': total_annual,
+                        'monthly_dd': monthly_dd,
+                        'total_contract_cost': total_contract,
+                        'labour_rates': labour_rates
+                    }
+
+                    # Fill the PDF
+                    filled_pdf = fill_lift_pdf(
+                        template_file=uploaded_pdf,
+                        contract_type=config['contract_type'],
+                        equipment_list=equipment_list,
+                        config=config,
+                        pricing_result=pdf_result
+                    )
+
+                    # Generate filename
+                    customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
+                    contract_name = config['contract_type'].replace('_', ' ').title()
+                    filename = f"Lift_{contract_name}_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+                    # Download button
+                    st.download_button(
+                        label="⬇️ Download Filled Contract",
+                        data=filled_pdf,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_pdf"
+                    )
+
+                    st.success("✓ PDF generated successfully!")
+
+                except Exception as e:
+                    st.error(f"Error generating PDF: {str(e)}")
+                    st.exception(e)
 
     st.markdown("---")
 
