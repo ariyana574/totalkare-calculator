@@ -77,9 +77,10 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
         field_data[prod_field] = products[i] if i < len(products) else ''
         field_data[serial_field] = serials[i] if i < len(serials) else ''
     
-    # Total quantity
-    total_qty = sum([eq.get('quantity', 1) for eq in equipment_list])
-    field_data['Quantity'] = str(int(total_qty))
+    # Total quantity - preserve decimals
+    total_qty = sum([float(eq.get('quantity', 1)) for eq in equipment_list])
+    # Show as integer if whole number, otherwise show decimal
+    field_data['Quantity'] = str(int(total_qty)) if total_qty == int(total_qty) else str(total_qty)
     
     # CONTRACT DETAILS
     field_data['Service_Contract_Type'] = format_contract_type(contract_type)
@@ -345,7 +346,7 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
     if state in ['.', '- -', 'nan', None]:
         state = ''
     
-    total_quantity = sum([int(eq.get('quantity', 1)) for eq in equipment_list])
+    total_quantity = sum([float(eq.get('quantity', 1)) for eq in equipment_list])
     labour_rates = pricing_result.get('labour_rates', {})
     contract_years = config.get('years', 1)
     total_contract_cost = pricing_result.get('total_contract_cost', 0)
@@ -371,7 +372,7 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
         'Product_2': product_boxes[1],
         'Product_3': product_boxes[2],
         'Product_4': product_boxes[3],
-        'Quantity': str(total_quantity),
+        'Quantity': str(int(total_quantity)) if total_quantity == int(total_quantity) else str(total_quantity),
         'Serial_Number': serial_boxes[0],
         'Serial_Number_1': serial_boxes[0],
         'Serial_Number_2': serial_boxes[1],
