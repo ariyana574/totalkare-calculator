@@ -89,24 +89,14 @@ def get_brake_tester_equipment():
     if data:
         df = pd.DataFrame(data)
         
-        # Show columns for reference
-        st.info(f"NetSuite API columns: {', '.join(df.columns.tolist())}")
-        
-        # Drop unnecessary columns (DON'T drop 'Name' - we need it for customer name!)
-        columns_to_drop = ['ID', 'Equipment Address', 'Primary Contact', 'First Name', 'Last Name', 
-                          'Shipping Address', 'Shipping Address 3', 'Last Modified']
-        
-        for col in columns_to_drop:
-            if col in df.columns:
-                df = df.drop(columns=[col])
-        
-        # Map columns
+        # Map columns FIRST (before dropping anything)
         column_mapping = {
             'Name': 'Name.1',                          # Customer name
-            'Internal ID': 'Customer_Internal_ID',
+            'Internal ID': 'Customer_Internal_ID',      # Equipment internal ID
+            'ID': 'ID',                                 # ✅ ACTUAL customer ID from NetSuite!
             'Date Created': 'Date Created',
-            'item1': 'Item',                           # Item name/code (ACH-GD150-1K)
-            'Description': 'Description',               # Full description
+            'item1': 'Item',                           # Item name/code
+            'Description': 'Description',
             'Serial Number': 'Serial Number',
             'Mfg Serial Number': 'Mfg Serial Number',
             'Customer Equipment Quantity': 'Customer Equipment Quantity',
@@ -119,20 +109,25 @@ def get_brake_tester_equipment():
         # Rename columns
         df = df.rename(columns=column_mapping)
         
+        # NOW drop unnecessary columns (AFTER mapping ID!)
+        columns_to_drop = ['Equipment Address', 'Primary Contact', 'First Name', 'Last Name', 
+                          'Shipping Address', 'Shipping Address 3', 'Last Modified']
+        
+        for col in columns_to_drop:
+            if col in df.columns:
+                df = df.drop(columns=[col])
+        
         # If Description is empty or NaN, use Item
         mask = (df['Description'].isna()) | (df['Description'] == '')
         df.loc[mask, 'Description'] = df.loc[mask, 'Item']
         
-        # CREATE a composite ID from Name + Address
-        df['ID'] = df['Name.1'] + ' | ' + df['Shipping Zip'].fillna('')
+        # ✅ DO NOT CREATE FAKE ID - we already have the real one from NetSuite!
+        # REMOVE THIS LINE: df['ID'] = df['Name.1'] + ' | ' + df['Shipping Zip'].fillna('')
         
-        # Show mapped columns
-        st.success(f"✅ Final columns: {', '.join(df.columns.tolist())}")
-        
-        # Add missing required columns
+        # Add missing required columns (if any)
         required_columns = ['ID', 'Name.1', 'Date Created', 'Item', 'Customer Equipment Quantity', 
                           'Shipping Address 1', 'Shipping City', 'Shipping Zip', 
-                          'Serial Number', 'Mfg Serial Number', 'Description']
+                          'Serial Number', 'Mfg Serial Number', 'Description', 'Customer_Internal_ID']
         
         for col in required_columns:
             if col not in df.columns:
