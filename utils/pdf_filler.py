@@ -1,11 +1,43 @@
 """
 PDF Form Filler for Brake Tester and Lift Contracts
 Fills PDF form fields with calculated contract data
+OPTIMIZED VERSION
 """
 
-from pypdf import PdfReader, PdfWriter
-from io import BytesIO
-from datetime import datetime
+import functools
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+@functools.lru_cache(maxsize=32)
+def format_contract_type(contract_type):
+    """Map contract type to display name"""
+    mapping = {
+        'standard_service': 'Standard Service',
+        'extra_service': 'Extra Service',
+        'fixed_labour': 'Fixed Labour',
+        'pro2_warranty': 'PRO-2 Warranty'
+    }
+    return mapping.get(contract_type, contract_type)
+
+
+@functools.lru_cache(maxsize=32)
+def get_parts_discount(contract_type):
+    """Get parts discount percentage for contract type"""
+    discounts = {
+        'standard_service': 10,
+        'extra_service': 30,
+        'fixed_labour': 35,
+        'pro2_warranty': 0  # PRO-2 includes all parts
+    }
+    return discounts.get(contract_type, 0)
+
+
+def format_quantity(qty):
+    """Format quantity - integer if whole number, decimal otherwise"""
+    return str(int(qty)) if qty == int(qty) else str(qty)
 
 
 # ============================================================================
@@ -26,92 +58,101 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
     Returns:
         Filled PDF as bytes
     """
+    from pypdf import PdfReader, PdfWriter
+    from io import BytesIO
+    
     template_file.seek(0)
     reader = PdfReader(template_file)
     writer = PdfWriter()
-    
-    # Clone all pages
     writer.append(reader)
     
-    # Get first equipment for customer info
+    # Pre-compute common values
     first_equipment = equipment_list[0]
+    customer_name = first_equipment.get('customer_name', '')
+    customer_id = first_equipment.get('customer_id', '')
     
-    # Prepare field data
-    field_data = {}
-    
-    # CUSTOMER INFO
-    field_data['Company_name'] = first_equipment.get('customer_name', '')
-    field_data['company_name'] = first_equipment.get('customer_name', '')
-    
-    # Format address
+    # Address components
     address_1 = first_equipment.get('address_1', '')
     city = first_equipment.get('city', '')
     state = first_equipment.get('state', '').replace('.', '').replace('- -', '').strip()
     postcode = first_equipment.get('postcode', '')
     
-    field_data['Company_address'] = address_1
-    field_data['Company_address_2'] = city
-    field_data['Company_address_3'] = state
-    field_data['Company_address_4'] = postcode
-    field_data['company_address'] = address_1
-    field_data['company_address_2'] = city
-    field_data['company_address_3'] = state
-    field_data['company_address_4'] = postcode
+    # Labour rates
+    labour_rates = pricing_result.get('labour_rates', {})
+    callout = labour_rates.get('callout_first_hour', 0)
+    travel = labour_rates.get('travel', 0)
+    additional = labour_rates.get('additional_hours', 0)
+    misuse = labour_rates.get('misuse_damage', 0)
     
-    field_data['Contact_Name'] = first_equipment.get('customer_name', '')
-    field_data['Contact_name'] = first_equipment.get('customer_name', '')
-    field_data['contact_name'] = first_equipment.get('customer_name', '')
-    field_data['Company_Code'] = first_equipment.get('customer_id', '')
-    
-    # EQUIPMENT INFO (Products 1-4 and Serial Numbers 1-4)
-    # Get ancillary items from config
-    ancillary_items = config.get('ancillary_items', {})
-    
-    # Format products and serials (includes ancillary)
-    products, serials = format_lift_products_and_serials(equipment_list, ancillary_items)
-    
-    for i in range(4):
-        prod_field = 'Product' if i == 0 else f'Product_{i+1}'
-        serial_field = 'Serial_Number' if i == 0 else f'Serial_Number_{i+1}'
-        
-        field_data[prod_field] = products[i] if i < len(products) else ''
-        field_data[serial_field] = serials[i] if i < len(serials) else ''
-    
-    # Total quantity - preserve decimals
-    total_qty = sum([float(eq.get('quantity', 1)) for eq in equipment_list])
-    # Show as integer if whole number, otherwise show decimal
-    field_data['Quantity'] = str(int(total_qty)) if total_qty == int(total_qty) else str(total_qty)
-    
-    # CONTRACT DETAILS
-    field_data['Service_Contract_Type'] = format_contract_type(contract_type)
-    field_data['Contract_Length'] = f"{config.get('years', 1)} Year{'s' if config.get('years', 1) > 1 else ''}"
-    field_data['No_PM_Visits'] = str(config.get('pm_visits', 2))
-    
-    # ROTE visits (handle typo in some templates)
-    rote_visits = config.get('rote_visits', 0)
-    field_data['No_ROTE_Visits'] = str(rote_visits) if rote_visits > 0 else '0'
-    field_data['No_ROTE_Vists'] = str(rote_visits) if rote_visits > 0 else '0'  # Typo version
-    
-    # Parts discount
-    parts_discount = get_parts_discount(contract_type)
-    field_data['Parts_Discount'] = f"{parts_discount}%"
-    
-    # PRICING
+    # Pricing
     monthly_dd = pricing_result.get('monthly_dd', 0)
     total_cost = pricing_result.get('total_contract_cost', 0)
     
-    field_data['Monthly_DD'] = f"£{monthly_dd:,.2f}"
-    field_data['Pay_Up_front'] = f"£{total_cost:,.2f}"
+    # Products and serials
+    ancillary_items = config.get('ancillary_items', {})
+    products, serials = format_lift_products_and_serials(equipment_list, ancillary_items)
     
-    # LABOUR RATES
-    labour_rates = pricing_result.get('labour_rates', {})
-    field_data['Call_Out_Cost'] = f"£{labour_rates.get('callout_first_hour', 0):.2f}"
-    field_data['Travel_Labour'] = f"£{labour_rates.get('travel', 0):.2f}"
-    field_data['TRAVEL LABOUR PER HOUR'] = f"£{labour_rates.get('additional_hours', 0):.2f}"
-    field_data['LABOUR HOURLY RATE FOR MISUSE & DAMAGE'] = f"£{labour_rates.get('misuse_damage', 0):.2f}"
+    # Total quantity
+    total_qty = sum([float(eq.get('quantity', 1)) for eq in equipment_list])
+    quantity_str = format_quantity(total_qty)
     
-    # Fill all pages
-    for page_num in range(len(writer.pages)):
+    # Contract details
+    years = config.get('years', 1)
+    pm_visits = config.get('pm_visits', 2)
+    rote_visits = config.get('rote_visits', 0)
+    
+    # Build field data dictionary
+    field_data = {
+        # Customer info
+        'Company_name': customer_name,
+        'company_name': customer_name,
+        'Contact_Name': customer_name,
+        'Contact_name': customer_name,
+        'contact_name': customer_name,
+        'Company_Code': customer_id,
+        
+        # Address
+        'Company_address': address_1,
+        'Company_address_2': city,
+        'Company_address_3': state,
+        'Company_address_4': postcode,
+        'company_address': address_1,
+        'company_address_2': city,
+        'company_address_3': state,
+        'company_address_4': postcode,
+        
+        # Equipment
+        'Product': products[0],
+        'Product_2': products[1],
+        'Product_3': products[2],
+        'Product_4': products[3],
+        'Serial_Number': serials[0],
+        'Serial_Number_2': serials[1],
+        'Serial_Number_3': serials[2],
+        'Serial_Number_4': serials[3],
+        'Quantity': quantity_str,
+        
+        # Contract details
+        'Service_Contract_Type': format_contract_type(contract_type),
+        'Contract_Length': f"{years} Year{'s' if years > 1 else ''}",
+        'No_PM_Visits': str(pm_visits),
+        'No_ROTE_Visits': str(rote_visits),
+        'No_ROTE_Vists': str(rote_visits),  # Typo version in some templates
+        'Parts_Discount': f"{get_parts_discount(contract_type)}%",
+        
+        # Pricing
+        'Monthly_DD': f"£{monthly_dd:,.2f}",
+        'Pay_Up_front': f"£{total_cost:,.2f}",
+        
+        # Labour rates
+        'Call_Out_Cost': f"£{callout:.2f}",
+        'Travel_Labour': f"£{travel:.2f}",
+        'TRAVEL LABOUR PER HOUR': f"£{additional:.2f}",
+        'LABOUR HOURLY RATE FOR MISUSE & DAMAGE': f"£{misuse:.2f}",
+    }
+    
+    # Fill only first 2 pages (most templates only have fields on first 2 pages)
+    for page_num in range(min(2, len(writer.pages))):
         writer.update_page_form_field_values(writer.pages[page_num], field_data)
     
     # Write to bytes
@@ -195,28 +236,6 @@ def format_lift_products_and_serials(equipment_list, ancillary_items=None):
         serials.append('')
     
     return products, serials
-
-
-def format_contract_type(contract_type):
-    """Map contract type to display name"""
-    mapping = {
-        'standard_service': 'Standard Service',
-        'extra_service': 'Extra Service',
-        'fixed_labour': 'Fixed Labour',
-        'pro2_warranty': 'PRO-2 Warranty'
-    }
-    return mapping.get(contract_type, contract_type)
-
-
-def get_parts_discount(contract_type):
-    """Get parts discount percentage for contract type"""
-    discounts = {
-        'standard_service': 10,
-        'extra_service': 30,
-        'fixed_labour': 35,
-        'pro2_warranty': 0  # PRO-2 includes all parts
-    }
-    return discounts.get(contract_type, 0)
 
 
 # ============================================================================
@@ -328,16 +347,20 @@ def format_products_and_serials(equipment_list, ancillary_items):
 
 def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, pricing_result):
     """Fill brake tester PDF - keeps fields editable but shows formatting"""
+    from pypdf import PdfReader, PdfWriter
+    from io import BytesIO
     
     template_file.seek(0)
     reader = PdfReader(template_file)
     writer = PdfWriter()
-    
-    # Clone everything
     writer.append(reader)
     
-    # Get data
+    # Pre-compute common values
     first_equipment = equipment_list[0]
+    customer_name = first_equipment.get('customer_name', '')
+    customer_id = first_equipment.get('customer_id', '')
+    
+    # Address components
     address_line_1 = first_equipment.get('address_1', '')
     city = first_equipment.get('city', '')
     state = first_equipment.get('state', '')
@@ -346,38 +369,53 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
     if state in ['.', '- -', 'nan', None]:
         state = ''
     
+    # Quantity
     total_quantity = sum([float(eq.get('quantity', 1)) for eq in equipment_list])
+    quantity_str = format_quantity(total_quantity)
+    
+    # Labour rates
     labour_rates = pricing_result.get('labour_rates', {})
+    callout = labour_rates.get('callout_first_hour', 0)
+    travel = labour_rates.get('travel', 0)
+    additional = labour_rates.get('additional_hours', 0)
+    misuse = labour_rates.get('misuse_damage', 0)
+    
+    # Pricing
     contract_years = config.get('years', 1)
     total_contract_cost = pricing_result.get('total_contract_cost', 0)
     monthly_dd = pricing_result.get('monthly_dd', 0)
     
-    # Get ancillary items from config
+    # Products and serials
     ancillary_items = config.get('ancillary_items', {})
-
-    # Format products and serials (includes ancillary)
     product_boxes, serial_boxes = format_products_and_serials(equipment_list, ancillary_items)
     
-    # Form data
+    # Build form data dictionary
     form_data = {
-        'company_name': first_equipment.get('customer_name', ''),
+        # Customer info
+        'company_name': customer_name,
+        'contact_name': config.get('contact_name', ''),
+        'company_code': customer_id,
+        'Company_Code': customer_id,
+        
+        # Address
         'company_address': address_line_1,
         'company_address_2': city,
         'company_address_3': state,
         'company_address_4': postcode,
-        'contact_name': config.get('contact_name', ''),
-        'company_code': first_equipment.get('customer_id', ''),
-        'Company_Code': first_equipment.get('customer_id', ''),
+        
+        # Equipment
         'Product': product_boxes[0],
         'Product_2': product_boxes[1],
         'Product_3': product_boxes[2],
         'Product_4': product_boxes[3],
-        'Quantity': str(int(total_quantity)) if total_quantity == int(total_quantity) else str(total_quantity),
+        'Quantity': quantity_str,
         'Serial_Number': serial_boxes[0],
         'Serial_Number_1': serial_boxes[0],
         'Serial_Number_2': serial_boxes[1],
         'Serial_Number_3': serial_boxes[2],
         'Serial_Number_4': serial_boxes[3],
+        
+        # Contract details
         'Service_Contract_Type': 'Brake Tester Service',
         'Service_Contract_Type 2': 'Brake Tester Service',
         'Contract_Length': f"{contract_years} Year{'s' if contract_years > 1 else ''}",
@@ -388,28 +426,31 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
         'Annum_Calibration 2': '2',
         'Parts_Discount': '30%',
         'Parts_Discount 2': '30%',
-        'Call_Out_Cost': f"£{labour_rates.get('callout_first_hour', 0):.2f}",
-        'Call_Out_Cost 2': f"£{labour_rates.get('callout_first_hour', 0):.2f}",
-        'Travel_Labour': f"£{labour_rates.get('travel', 0):.2f}",
-        'Travel_Labour 2': f"£{labour_rates.get('travel', 0):.2f}",
-        'Labour_Hourly_Rate': f"£{labour_rates.get('additional_hours', 0):.2f}",
-        'Labour_Hourly_Rate 2': f"£{labour_rates.get('additional_hours', 0):.2f}",
-        'TRAVEL LABOUR PER HOUR': f"£{labour_rates.get('travel', 0):.2f}",
-        'LABOUR HOURLY RATE FOR MISUSE & DAMAGE': f"£{labour_rates.get('misuse_damage', 0):.2f}",
+        
+        # Labour rates
+        'Call_Out_Cost': f"£{callout:.2f}",
+        'Call_Out_Cost 2': f"£{callout:.2f}",
+        'Travel_Labour': f"£{travel:.2f}",
+        'Travel_Labour 2': f"£{travel:.2f}",
+        'Labour_Hourly_Rate': f"£{additional:.2f}",
+        'Labour_Hourly_Rate 2': f"£{additional:.2f}",
+        'TRAVEL LABOUR PER HOUR': f"£{travel:.2f}",
+        'LABOUR HOURLY RATE FOR MISUSE & DAMAGE': f"£{misuse:.2f}",
+        
+        # Pricing
         'Monthly_DD': f"£{monthly_dd:.2f}",
         'Monthly_DD 2': f"£{monthly_dd:.2f}",
         'Pay_Up_front': f"£{total_contract_cost:.2f}",
         'Pay_Up_front 2': f"£{total_contract_cost:.2f}",
     }
-
     
-    # Fill pages
-    writer.update_page_form_field_values(writer.pages[0], form_data)
-    if len(writer.pages) > 1:
-        writer.update_page_form_field_values(writer.pages[1], form_data)
+    # Fill only first 2 pages (brake tester templates only have fields on first 2 pages)
+    for page_num in range(min(2, len(writer.pages))):
+        writer.update_page_form_field_values(writer.pages[page_num], form_data)
     
-    # Write
+    # Write to bytes
     output = BytesIO()
     writer.write(output)
     output.seek(0)
+    
     return output
