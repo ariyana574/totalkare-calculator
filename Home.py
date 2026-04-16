@@ -10,6 +10,13 @@ from datetime import datetime
 
 BASE_DIR = pathlib.Path(__file__).parent
 
+
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
+def get_cached_pricing(price_list='new'):
+    """Cached version of get_pricing - prevents slow Google Sheets fetches"""
+    from config.pricing import get_pricing
+    return get_pricing(price_list)
+
 st.set_page_config(
     page_title="TotalKare Contract Calculator",
     page_icon="🔧",
@@ -199,13 +206,18 @@ def show_equipment_selection():
     
     df = st.session_state.customer_data
     
+    # Clean ID column once and cache it
+    if 'id_column_cleaned' not in st.session_state:
+        df['ID'] = df['ID'].astype(str).str.strip()
+        st.session_state.customer_data = df
+        st.session_state.id_column_cleaned = True
+    
     # Customer selection dropdown
     customer_ids = df['ID'].unique()
     customer_options = []
     customer_display_to_id = {}
     
     for cid in customer_ids:
-        # Convert both to string for comparison - THIS IS THE FIX
         customer_records = df[df['ID'].astype(str) == str(cid)]
         
         if len(customer_records) > 0:
@@ -213,7 +225,6 @@ def show_equipment_selection():
             address_1 = customer_records['Shipping Address 1'].iloc[0] if 'Shipping Address 1' in customer_records.columns else ''
             zip_code = customer_records['Shipping Zip'].iloc[0] if 'Shipping Zip' in customer_records.columns else ''
             
-            # Show equipment count
             equipment_count = len(customer_records)
             display = f"{customer_name} - ID: {cid} - {address_1} {zip_code} ({equipment_count} items)"
             customer_options.append(display)
@@ -227,14 +238,13 @@ def show_equipment_selection():
     )
     
     if selected_customer is not None:
-        # Extract customer ID from selection map
         customer_id = customer_display_to_id.get(selected_customer, None)
         
         if customer_id is None:
             st.error("Unable to determine customer ID from selection")
             return
         
-        # Get customer data (ensure types align)
+        # Get customer data
         customer_df = df[df['ID'].astype(str) == str(customer_id)]
         
         if len(customer_df) == 0:
@@ -277,8 +287,15 @@ def show_equipment_selection():
                 • Ferry/hotel charges will be added separately
                 """)
         
-        # Equipment selection
-        st.subheader("Select Equipment for Contract")
+        # Equipment selection with Select All button next to title
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.subheader("Select Equipment for Contract")
+        with col2:
+            if st.button("✓ Select All", use_container_width=True):
+                for idx, row in customer_df.iterrows():
+                    st.session_state[f"eq_{idx}"] = True
+                st.rerun()
         
         selected_items = []
         for idx, row in customer_df.iterrows():
@@ -292,8 +309,6 @@ def show_equipment_selection():
             date_created = str(row.get('Date Created', ''))[:10] if pd.notna(row.get('Date Created')) else 'N/A'
             
             item_label = f"**{description}** - {row['Item']} (Serial: {serial}) - Qty: {row['Customer Equipment Quantity']} - Date: {date_created}"
-
-            #customer_df.loc[idx, 'Description'] 
             
             if st.checkbox(item_label, key=f"eq_{idx}"):
                 selected_items.append({
@@ -476,8 +491,9 @@ def show_pricing_tier_selection():
     
     # Continue button
     if st.button("Continue →", type="primary"):
-        st.session_state.step = 6
-        st.rerun()
+        with st.spinner("Loading service options..."):
+            st.session_state.step = 6
+            st.rerun()
     
     # Back button
     if st.button("← Back"):
@@ -617,9 +633,8 @@ def show_lift_service_options():
     st.markdown("---")
     st.subheader("Ancillary Equipment")
     
-    # Get available ancillary from pricing
-    from config.pricing import get_pricing
-    pricing = get_pricing(st.session_state.contract_config.get('price_list', 'new'))
+    # Get available ancillary from pricing (CACHED)
+    pricing = get_cached_pricing(st.session_state.contract_config.get('price_list', 'new'))
     available_ancillary = pricing.get('ancillary_rates', {})
     
     if available_ancillary:
@@ -694,9 +709,8 @@ def show_brake_tester_service_options():
     st.markdown("---")
     st.subheader("Ancillary Equipment")
     
-    # Get available ancillary from pricing
-    from config.pricing import get_pricing
-    pricing = get_pricing(st.session_state.contract_config.get('price_list', 'new'))
+    # Get available ancillary from pricing (CACHED)
+    pricing = get_cached_pricing(st.session_state.contract_config.get('price_list', 'new'))
     available_ancillary = pricing.get('ancillary_rates', {})
     
     if available_ancillary:
