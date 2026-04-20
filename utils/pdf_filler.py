@@ -106,9 +106,9 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
         # Customer info
         'Company_name': customer_name,
         'company_name': customer_name,
-        'Contact_Name': customer_name,
-        'Contact_name': customer_name,
-        'contact_name': customer_name,
+        #'Contact_Name': customer_name,
+        #'Contact_name': customer_name,
+        #'contact_name': customer_name,
         'Company_Code': customer_id,
         
         # Address
