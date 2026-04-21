@@ -106,9 +106,6 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
         # Customer info
         'Company_name': customer_name,
         'company_name': customer_name,
-        #'Contact_Name': customer_name,
-        #'Contact_name': customer_name,
-        #'contact_name': customer_name,
         'Company_Code': customer_id,
         
         # Address
@@ -149,6 +146,15 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
         'Travel_Labour': f"£{travel:.2f}",
         'TRAVEL LABOUR PER HOUR': f"£{additional:.2f}",
         'LABOUR HOURLY RATE FOR MISUSE & DAMAGE': f"£{misuse:.2f}",
+        
+        # SIGNATURE FIELDS (exact field names from PDF)
+        'Signature': pricing_result.get('signature_name', ''),
+        'TK_Signature': pricing_result.get('signature_name', ''),
+        'TK_Name': pricing_result.get('signature_title', ''),
+        #'signature_date': pricing_result.get('signature_date', ''),
+        'TK_signature_date 2': pricing_result.get('signature_date', ''),
+        'TK_signature_date': pricing_result.get('signature_date', ''),
+        'Date of Signature': pricing_result.get('signature_date', '')
     }
     
     # Fill only first 2 pages (most templates only have fields on first 2 pages)
@@ -394,11 +400,15 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
         # Customer info
         'company_name': customer_name,
         'contact_name': config.get('contact_name', ''),
+        'COMPANY NAME': customer_name,
         'company_code': customer_id,
         'Company_Code': customer_id,
-        'company_code': customer_id,
         
         # Address
+        'COMPANY ADDRESS': address_line_1,
+        'COMPANY ADDRESS 2': city,
+        'COMPANY ADDRESS 3': state,
+        'COMPANY ADDRESS 4': postcode,
         'company_address': address_line_1,
         'company_address_2': city,
         'company_address_3': state,
@@ -443,6 +453,15 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
         'Monthly_DD 2': f"£{monthly_dd:.2f}",
         'Pay_Up_front': f"£{total_contract_cost:.2f}",
         'Pay_Up_front 2': f"£{total_contract_cost:.2f}",
+        
+        # SIGNATURE FIELDS (exact field names from PDF)
+        'Signature': pricing_result.get('signature_name', ''),
+        'TK_Signature': pricing_result.get('signature_name', ''),
+        'TK_Name': pricing_result.get('signature_title', ''),
+        #'signature_date': pricing_result.get('signature_date', ''),
+        'TK_signature_date 2': pricing_result.get('signature_date', ''),
+        'TK_signature_date': pricing_result.get('signature_date', ''),
+        'Date of Signature': pricing_result.get('signature_date', '')
     }
     
     # Fill only first 2 pages (brake tester templates only have fields on first 2 pages)
