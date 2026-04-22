@@ -399,7 +399,7 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
     form_data = {
         # Customer info
         'Company_name': customer_name,
-        #'company_name': customer_name,
+        'company_name': customer_name,
         'contact_name': config.get('contact_name', ''),
         'COMPANY NAME': customer_name,
         'company_code': customer_id,

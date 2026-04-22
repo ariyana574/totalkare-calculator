@@ -752,6 +752,31 @@ def show_brake_tester_service_options():
     
     st.markdown("---")
     
+    # ✅ ONLY SHOW CONTRACT TYPE IF NEW PRICE LIST SELECTED
+    price_list = st.session_state.contract_config.get('price_list', 'new')
+    
+    if price_list == 'new':
+        # Contract type selection (only for new pricing)
+        st.subheader("🔧 Contract Type")
+        
+        warranty_type = st.radio(
+            "Select contract type:",
+            options=["NON Extended Warranty", "Extended Warranty"],
+            help="Extended Warranty includes additional coverage - £1,500 (one lift), £1,440 (multi sets), £1,392 (national accounts)"
+        )
+        
+        # Store warranty selection
+        st.session_state.contract_config['brake_warranty'] = (warranty_type == "Extended Warranty")
+        
+        # Show info about what's included
+        if warranty_type == "Extended Warranty":
+            st.success("✓ Extended Warranty includes enhanced coverage and support")
+        
+        st.markdown("---")
+    else:
+        # Old pricing - no extended warranty option
+        st.session_state.contract_config['brake_warranty'] = False
+    
     st.info("Brake testers include:\n- 2 PM visits/year (fixed)\n- 2 Calibrations/year\n- 30% parts discount")
     
     # ROTE selection
@@ -1371,11 +1396,19 @@ def calculate_brake_tester_contract(equipment, config):
     from calculators.brake_tester_calculator import BrakeTesterCalculator
     from calculators.addons_calculator import AddonsCalculator
     
-    # Initialize calculator
+    # ✅ Check if extended warranty selected
+    if config.get('brake_warranty', False):
+        # Override price_list to use extended warranty rates
+        price_list = 'new_extended_warranty'
+    else:
+        # Use standard price list (new or old)
+        price_list = config.get('price_list', 'new')
+    
+    # Initialize calculator with correct price list
     calc = BrakeTesterCalculator(
         tier=config['tier'],
         quantity=equipment['quantity'],
-        price_list=config['price_list'],
+        price_list=price_list,  # ✅ Use modified price_list
         years=config['years']
     )
     
@@ -1385,7 +1418,7 @@ def calculate_brake_tester_contract(equipment, config):
         addons_calc = AddonsCalculator(
             tier=config['tier'],
             quantity=1.0,  # Add-ons are per contract
-            price_list=config['price_list'],
+            price_list=config.get('price_list', 'new'),  # Add-ons always use standard pricing
             pm_visits=2
         )
         
@@ -1401,5 +1434,6 @@ def calculate_brake_tester_contract(equipment, config):
     result = calc.calculate_total(addons=addons_calc)
     
     return result
+
 if __name__ == "__main__":
     main()

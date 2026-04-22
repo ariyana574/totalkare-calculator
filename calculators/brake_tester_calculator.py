@@ -1,5 +1,5 @@
 """
-Brake Tester Contract Calculator
+Brake Tester Contract Calculator - WITH EXTENDED WARRANTY SUPPORT
 """
 
 from config.pricing import get_pricing
@@ -9,26 +9,57 @@ from calculators.addons_calculator import AddonsCalculator
 class BrakeTesterCalculator:
     """Calculate pricing for brake tester contracts"""
     
-    def __init__(self, tier: str, quantity: float, price_list: str = "new",  years: int = 1):
+    def __init__(self, tier: str, quantity: float, price_list: str = "new", years: int = 1):
         """
         Initialize calculator
             
         Args:
             tier: "one_lift", "multi_sets", or "national_accounts"
             quantity: From NetSuite
+            price_list: "new", "old", or "new_extended_warranty"
+            years: Contract duration
         """
         self.tier = tier
         self.quantity = quantity
         self.price_list = price_list
         self.years = years
-
         
-        # Get correct pricing
-        from config.pricing import get_pricing
-        pricing = get_pricing(price_list)
+        # Get correct pricing from Google Sheets
+        pricing = get_pricing('new')  # ✅ Always get 'new' pricing first
         
-        self.base_rate = pricing["brake_tester_base_rates"][tier]
-        self.parts_discount = pricing["parts_discounts"]["brake_tester"]
+        # ✅ Try multiple locations for brake tester rates
+        brake_rates = pricing.get("brake_tester_rates", {})
+        
+        # Check if extended warranty
+        if price_list == 'new_extended_warranty':
+            # Try to get extended warranty rates
+            if 'new_extended_warranty' in brake_rates:
+                # Found it in brake_tester_rates dict
+                tier_rates = brake_rates.get('new_extended_warranty', {})
+                self.base_rate = tier_rates.get(tier, 0)
+            else:
+                # Manual fallback - extended warranty pricing
+                extended_rates = {
+                    'one_lift': 1500,
+                    'multi_sets': 1440,
+                    'national_accounts': 1392
+                }
+                self.base_rate = extended_rates.get(tier, 0)
+        else:
+            # Standard pricing (new or old)
+            base_rates = pricing.get("brake_tester_base_rates", {})
+            self.base_rate = base_rates.get(tier, 0)
+            
+            # If not found, try the other structure
+            if self.base_rate == 0 and price_list in brake_rates:
+                tier_rates = brake_rates.get(price_list, {})
+                self.base_rate = tier_rates.get(tier, 0)
+        
+        # Validate we got a rate
+        if self.base_rate == 0:
+            raise ValueError(f"No pricing found for tier '{tier}' with price_list '{price_list}'. Check Google Sheets!")
+        
+        self.parts_discount = pricing.get("parts_discounts", {}).get("brake_tester", 30)
         
     def calculate_total(self, addons: AddonsCalculator = None) -> dict:
         """
@@ -78,11 +109,11 @@ class BrakeTesterCalculator:
             "parts_discount": self.parts_discount,
             "pm_visits_per_year": 2,
             "calibrations_per_year": 2,
-            "labour_included": False
+            "labour_included": False,
+            "price_list": self.price_list
         }
     
     def get_labour_rates(self) -> dict:
         """Get labour rates for brake testers"""
-        from config.pricing import get_pricing
-        pricing = get_pricing(self.price_list)
-        return pricing["labour_rates"]["brake_tester"]
+        pricing = get_pricing('new')
+        return pricing.get("labour_rates", {}).get("brake_tester", {})
