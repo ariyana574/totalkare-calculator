@@ -398,13 +398,19 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
     # Build form data dictionary
     form_data = {
         # Customer info
-        'company_name': customer_name,
+        'Company_name': customer_name,
+        #'company_name': customer_name,
         'contact_name': config.get('contact_name', ''),
         'COMPANY NAME': customer_name,
         'company_code': customer_id,
         'Company_Code': customer_id,
         
         # Address
+        'Company_address': address_line_1,
+        'Company_address_2': city,
+        'Company_address_3': state,
+        'Company_address_4': postcode,
+        'Contact_name': config.get('contact_name', ''),
         'COMPANY ADDRESS': address_line_1,
         'COMPANY ADDRESS 2': city,
         'COMPANY ADDRESS 3': state,
