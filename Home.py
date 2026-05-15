@@ -1099,36 +1099,13 @@ def show_review_and_calculate():
     st.markdown("---")
     st.subheader("📄 Generate PDF Contract")
     
-    # ✅ SIGNATURE INPUT SECTION (NEW!)
-    st.write("**Contract Signature**")
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        signature_name = st.text_input(
-            "Enter your full name for signature:",
-            placeholder="e.g., John Smith",
-            help="This will appear as a signature on the contract"
-        )
-    with col2:
-        signature_title = st.text_input(
-            "Job Title:",
-            placeholder="e.g., Sales Manager",
-            help="Optional - your job title"
-        )
-
-    # Show signature preview if name is entered
-    if signature_name:
-        st.write("**Signature Preview:**")
-        st.markdown(f"""
-        <div style="font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 36px; color: #1e3a8a; padding: 10px; border-bottom: 2px solid #1e3a8a; width: fit-content; font-style: italic;">
-            {signature_name}
-        </div>
-        <div style="font-size: 14px; color: #666; margin-top: 5px;">
-            {signature_title if signature_title else ""}
-        </div>
-        <div style="font-size: 12px; color: #999; margin-top: 5px;">
-            Date: {datetime.now().strftime('%d/%m/%Y')}
-        </div>
-        """, unsafe_allow_html=True)
+    # ✅ CONTRACT DETAILS INPUT (JOB TITLE ONLY)
+    st.write("**Contract Details**")
+    signature_title = st.text_input(
+        "Job Title:",
+        placeholder="e.g., Sales Manager",
+        help="Your job title for the contract"
+    )
     
     st.markdown("---")
     
@@ -1152,59 +1129,54 @@ def show_review_and_calculate():
             
             # Generate PDF button
             if st.button("📄 Generate Filled Contract", type="primary", key="gen_pdf"):
-                # ✅ Check if signature name is provided
-                if not signature_name or signature_name.strip() == "":
-                    st.error("⚠️ Please enter your name for the signature before generating the PDF")
-                else:
-                    try:
-                        from utils.pdf_filler import fill_brake_tester_pdf
-                        from config.pricing import get_pricing
+                try:
+                    from utils.pdf_filler import fill_brake_tester_pdf
+                    from config.pricing import get_pricing
 
-                        # Get labour rates from Google Sheets
-                        pricing_data = get_pricing(config.get('price_list', 'new'))
-                        labour_rates = pricing_data.get('labour_rates', {}).get('brake_tester', {})
+                    # Get labour rates from Google Sheets
+                    pricing_data = get_pricing(config.get('price_list', 'new'))
+                    labour_rates = pricing_data.get('labour_rates', {}).get('brake_tester', {})
 
-                        total_months = config.get('years', 1) * 12
-                        correct_monthly_dd = total_contract / total_months
+                    total_months = config.get('years', 1) * 12
+                    correct_monthly_dd = total_contract / total_months
 
-                        # ✅ Prepare result data with labour rates AND signature
-                        pdf_result = {
-                            'annual_cost': total_annual,
-                            'monthly_dd': correct_monthly_dd,
-                            'total_contract_cost': total_contract,
-                            'labour_rates': labour_rates,
-                            'signature_name': signature_name,
-                            'signature_title': signature_title,
-                            'signature_date': datetime.now().strftime('%d/%m/%Y')
-                        }
+                    # ✅ Prepare result data with labour rates (NO signature name)
+                    pdf_result = {
+                        'annual_cost': total_annual,
+                        'monthly_dd': correct_monthly_dd,
+                        'total_contract_cost': total_contract,
+                        'labour_rates': labour_rates,
+                        'signature_title': signature_title,
+                        'signature_date': datetime.now().strftime('%d/%m/%Y')
+                    }
 
-                        # Fill the PDF
-                        filled_pdf = fill_brake_tester_pdf(
-                            template_file=uploaded_pdf,
-                            template_type=template_type,
-                            equipment_list=equipment_list,
-                            config=config,
-                            pricing_result=pdf_result
-                        )
+                    # Fill the PDF
+                    filled_pdf = fill_brake_tester_pdf(
+                        template_file=uploaded_pdf,
+                        template_type=template_type,
+                        equipment_list=equipment_list,
+                        config=config,
+                        pricing_result=pdf_result
+                    )
 
-                        # Generate filename
-                        customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
-                        filename = f"Brake_Tester_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    # Generate filename
+                    customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
+                    filename = f"Brake_Tester_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
-                        # Download button
-                        st.download_button(
-                            label="⬇️ Download Filled Contract",
-                            data=filled_pdf,
-                            file_name=filename,
-                            mime="application/pdf",
-                            key="download_pdf"
-                        )
+                    # Download button
+                    st.download_button(
+                        label="⬇️ Download Filled Contract",
+                        data=filled_pdf,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_pdf"
+                    )
 
-                        st.success("✓ PDF generated successfully!")
+                    st.success("✓ PDF generated successfully!")
 
-                    except Exception as e:
-                        st.error(f"Error generating PDF: {str(e)}")
-                        st.exception(e)
+                except Exception as e:
+                    st.error(f"Error generating PDF: {str(e)}")
+                    st.exception(e)
         
         # LIFT PDF GENERATION
         else:  # equipment_type == "lift"
@@ -1213,65 +1185,60 @@ def show_review_and_calculate():
             
             # Generate PDF button
             if st.button("📄 Generate Filled Contract", type="primary", key="gen_pdf"):
-                # ✅ Check if signature name is provided
-                if not signature_name or signature_name.strip() == "":
-                    st.error("⚠️ Please enter your name for the signature before generating the PDF")
-                else:
-                    try:
-                        from utils.pdf_filler import fill_lift_pdf
-                        from config.pricing import get_pricing
+                try:
+                    from utils.pdf_filler import fill_lift_pdf
+                    from config.pricing import get_pricing
 
-                        # Get labour rates from Google Sheets
-                        pricing_data = get_pricing(config.get('price_list', 'new'))
-                        
-                        # Use contract type directly (standard_service, extra_service, fixed_labour)
-                        contract_type = config['contract_type']
-                        
-                        # PRO-2 Warranty uses extra_service labour rates
-                        if contract_type == 'pro2_warranty':
-                            labour_rates = pricing_data.get('labour_rates', {}).get('extra_service', {})
-                        else:
-                            labour_rates = pricing_data.get('labour_rates', {}).get(contract_type, {})
+                    # Get labour rates from Google Sheets
+                    pricing_data = get_pricing(config.get('price_list', 'new'))
+                    
+                    # Use contract type directly (standard_service, extra_service, fixed_labour)
+                    contract_type = config['contract_type']
+                    
+                    # PRO-2 Warranty uses extra_service labour rates
+                    if contract_type == 'pro2_warranty':
+                        labour_rates = pricing_data.get('labour_rates', {}).get('extra_service', {})
+                    else:
+                        labour_rates = pricing_data.get('labour_rates', {}).get(contract_type, {})
 
-                        # ✅ Prepare result data with labour rates AND signature
-                        pdf_result = {
-                            'annual_cost': total_annual,
-                            'monthly_dd': monthly_dd,
-                            'total_contract_cost': total_contract,
-                            'labour_rates': labour_rates,
-                            'signature_name': signature_name,
-                            'signature_title': signature_title,
-                            'signature_date': datetime.now().strftime('%d/%m/%Y')
-                        }
+                    # ✅ Prepare result data with labour rates (NO signature name)
+                    pdf_result = {
+                        'annual_cost': total_annual,
+                        'monthly_dd': monthly_dd,
+                        'total_contract_cost': total_contract,
+                        'labour_rates': labour_rates,
+                        'signature_title': signature_title,
+                        'signature_date': datetime.now().strftime('%d/%m/%Y')
+                    }
 
-                        # Fill the PDF
-                        filled_pdf = fill_lift_pdf(
-                            template_file=uploaded_pdf,
-                            contract_type=config['contract_type'],
-                            equipment_list=equipment_list,
-                            config=config,
-                            pricing_result=pdf_result
-                        )
+                    # Fill the PDF
+                    filled_pdf = fill_lift_pdf(
+                        template_file=uploaded_pdf,
+                        contract_type=config['contract_type'],
+                        equipment_list=equipment_list,
+                        config=config,
+                        pricing_result=pdf_result
+                    )
 
-                        # Generate filename
-                        customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
-                        contract_name = config['contract_type'].replace('_', ' ').title()
-                        filename = f"Lift_{contract_name}_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    # Generate filename
+                    customer_name = first_equipment.get('customer_name', 'Customer').replace(' ', '_')
+                    contract_name = config['contract_type'].replace('_', ' ').title()
+                    filename = f"Lift_{contract_name}_Contract_{customer_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
-                        # Download button
-                        st.download_button(
-                            label="⬇️ Download Filled Contract",
-                            data=filled_pdf,
-                            file_name=filename,
-                            mime="application/pdf",
-                            key="download_pdf"
-                        )
+                    # Download button
+                    st.download_button(
+                        label="⬇️ Download Filled Contract",
+                        data=filled_pdf,
+                        file_name=filename,
+                        mime="application/pdf",
+                        key="download_pdf"
+                    )
 
-                        st.success("✓ PDF generated successfully!")
+                    st.success("✓ PDF generated successfully!")
 
-                    except Exception as e:
-                        st.error(f"Error generating PDF: {str(e)}")
-                        st.exception(e)
+                except Exception as e:
+                    st.error(f"Error generating PDF: {str(e)}")
+                    st.exception(e)
 
     st.markdown("---")
 

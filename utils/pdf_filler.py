@@ -148,8 +148,8 @@ def fill_lift_pdf(template_file, contract_type, equipment_list, config, pricing_
         'LABOUR HOURLY RATE FOR MISUSE & DAMAGE': f"£{misuse:.2f}",
         
         # SIGNATURE FIELDS (exact field names from PDF)
-        'Signature': pricing_result.get('signature_name', ''),
-        'TK_Signature': pricing_result.get('signature_name', ''),
+        #'Signature': pricing_result.get('signature_name', ''),
+        #'TK_Signature': pricing_result.get('signature_name', ''),
         'TK_Name': pricing_result.get('signature_title', ''),
         #'signature_date': pricing_result.get('signature_date', ''),
         'TK_signature_date 2': pricing_result.get('signature_date', ''),
@@ -461,8 +461,8 @@ def fill_brake_tester_pdf(template_file, template_type, equipment_list, config, 
         'Pay_Up_front 2': f"£{total_contract_cost:.2f}",
         
         # SIGNATURE FIELDS (exact field names from PDF)
-        'Signature': pricing_result.get('signature_name', ''),
-        'TK_Signature': pricing_result.get('signature_name', ''),
+        #'Signature': pricing_result.get('signature_name', ''),
+        #'TK_Signature': pricing_result.get('signature_name', ''),
         'TK_Name': pricing_result.get('signature_title', ''),
         #'signature_date': pricing_result.get('signature_date', ''),
         'TK_signature_date 2': pricing_result.get('signature_date', ''),
